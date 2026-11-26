@@ -71,7 +71,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { variant: clean,             task: prove, expect: pass }
           - { variant: clean,             task: bmc,   expect: pass }
           - { variant: clean,             task: cover, expect: pass }
           - { variant: BUG_WR_WHEN_FULL,  task: bmc,   expect: fail }

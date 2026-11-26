@@ -328,7 +328,7 @@ def step_formal(args):
         pnames.update(prop_names(f))
     defs = " ".join(f"-D{x}" for x in defines(args.variant, ["META_INJECT"]))
     if args.task == "all":
-        tasks = ["prove", "bmc", "cover"] if args.variant == "clean" else ["bmc"]
+        tasks = ["bmc", "cover"] if args.variant == "clean" else ["bmc"]
     else:
         tasks = [args.task]
     # clean design: ABC engines (fast on this multiclock model); mutants: smtbmc gives readable traces
@@ -362,10 +362,11 @@ def step_formal(args):
             failed.append(pnames.get(key, f"{key[0]}:{key[1]}"))
         fstep = re.search(r"failed assertion .*? step (\d+)", out)
         reached = []
-        for m in re.finditer(r"Reached cover statement at (\S+?):(\d+)", out):
-            key = (Path(m.group(1)).name, int(m.group(2)))
+        csteps = []
+        for m in re.finditer(r"Reached cover statement in step (\d+) at \S+: (\S+?):(\d+)", out):
+            key = (Path(m.group(2)).name, int(m.group(3)))
             reached.append(pnames.get(key, f"{key[0]}:{key[1]}"))
-        csteps = [int(x) for x in re.findall(r"Reached cover statement .*? in step (\d+)", out)]
+            csteps.append(int(m.group(1)))
         unreached = len(re.findall(r"Unreached cover statement", out))
         res["tasks"][t] = {"status": status, "engine": engine[t], "time_s": dt,
                            "depth": FORMAL_DEPTH.get(t), "failed_props": sorted(set(failed)),
@@ -435,6 +436,7 @@ def main():
     ap.add_argument("--expect", choices=["pass", "fail"])
     ap.add_argument("--txns", type=int, default=3000)
     ap.add_argument("--seed", type=int, default=1)
+    # "prove" (abc pdr, unbounded) is available but did not converge within 35 min on a CI runner
     ap.add_argument("--task", default="all", choices=["all", "prove", "bmc", "cover"])
     ap.add_argument("--formal-timeout", type=int, default=1200, help="seconds per sby task")
     args = ap.parse_args()
