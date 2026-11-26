@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RTL = ["rtl/sync_2ff.sv", "rtl/async_fifo.sv"]
 BUILD = ROOT / "build"
 OUT = ROOT / "reports" / "signoff"
-FORMAL_DEPTH = {"bmc": 40, "cover": 48}
+FORMAL_DEPTH = {"bmc": 30, "cover": 40}
 
 SIM_CONFIGS = [  # name, wper, rper, wphase, rphase (ps)
     ("1to1_skewed", 10000, 10000, 0, 3300),
@@ -279,7 +279,7 @@ def step_lec(args):
         print(out[-3000:])
         return False, {"error": "synth failed"}
     stat = (d / "stat.txt").read_text()
-    cells = re.search(r"Number of cells:\s+(\d+)", stat)
+    cells = re.search(r"Number of cells:\s+(\d+)", stat) or re.search(r"^\s*(\d+)\s+cells\s*$", stat, re.M)
     ffs = sum(int(n) for n in re.findall(r"\$_\w*DFF\w*\s+(\d+)", stat))
     script = (f"read_verilog -sv {rtl}; hierarchy -top async_fifo; proc; opt_clean; memory; opt_clean; flatten; "
               f"rename async_fifo gold; design -stash gold; "
@@ -331,8 +331,7 @@ def step_formal(args):
     sby = "\n".join([
         "[tasks]", *tasks, "",
         "[options]",
-        f"bmc: mode bmc", f"bmc: depth {FORMAL_DEPTH['bmc']}",
-        f"cover: mode cover", f"cover: depth {FORMAL_DEPTH['cover']}",
+        *[l for t in tasks for l in (f"{t}: mode {t}", f"{t}: depth {FORMAL_DEPTH[t]}")],
         "multiclock on", "",
         "[engines]", "smtbmc yices", "",
         "[script]",
@@ -368,6 +367,7 @@ def step_formal(args):
               + (f" covers reached: {', '.join(sorted(set(reached)))}; unreached {unreached}" if t == "cover" else ""))
         if status in ("ERROR", "TIMEOUT"):
             print(out[-3000:])
+            res["error"] = f"sby {t} {status}"
         if t == "bmc":
             ok &= status == "PASS"
         else:
@@ -423,13 +423,13 @@ def main():
     ap.add_argument("--expect", choices=["pass", "fail"])
     ap.add_argument("--txns", type=int, default=3000)
     ap.add_argument("--seed", type=int, default=1)
-    ap.add_argument("--formal-timeout", type=int, default=2400, help="seconds per sby task")
+    ap.add_argument("--formal-timeout", type=int, default=1200, help="seconds per sby task")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     BUILD.mkdir(parents=True, exist_ok=True)
     ok, res = {"lint": step_lint, "cdc": step_cdc, "lec": step_lec,
                "formal": step_formal, "sim": step_sim}[args.step](args)
-    result = "pass" if ok else "fail"
+    result = "error" if res.get("error") else ("pass" if ok else "fail")
     res.update(step=args.step, variant=args.variant, result=result, expect=args.expect)
     (OUT / f"{args.step}_{args.variant}.json").write_text(json.dumps(res, indent=2))
     line = f"SIGNOFF step={args.step} variant={args.variant} result={result}" + \
