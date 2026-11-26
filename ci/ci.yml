@@ -66,29 +66,32 @@ jobs:
 
   formal:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { variant: clean,             expect: pass }
-          - { variant: BUG_WR_WHEN_FULL,  expect: fail }
-          - { variant: BUG_RD_WHEN_EMPTY, expect: fail }
-          - { variant: BUG_FULL_MSB,      expect: fail }
-          - { variant: BUG_GRAY_CONV,     expect: fail }
-    name: formal (${{ matrix.variant }}, expect ${{ matrix.expect }})
+          - { variant: clean,             task: prove, expect: pass }
+          - { variant: clean,             task: bmc,   expect: pass }
+          - { variant: clean,             task: cover, expect: pass }
+          - { variant: BUG_WR_WHEN_FULL,  task: bmc,   expect: fail }
+          - { variant: BUG_RD_WHEN_EMPTY, task: bmc,   expect: fail }
+          - { variant: BUG_FULL_MSB,      task: bmc,   expect: fail }
+          - { variant: BUG_GRAY_CONV,     task: bmc,   expect: fail }
+    name: formal (${{ matrix.variant }} ${{ matrix.task }}, expect ${{ matrix.expect }})
     steps:
       - uses: actions/checkout@v4
       - uses: YosysHQ/setup-oss-cad-suite@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - run: python3 scripts/signoff.py formal --variant ${{ matrix.variant }} --expect ${{ matrix.expect }}
+      - run: python3 scripts/signoff.py formal --variant ${{ matrix.variant }} --task ${{ matrix.task }} --expect ${{ matrix.expect }} --formal-timeout 2100
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: formal-${{ matrix.variant }}
+          name: formal-${{ matrix.variant }}-${{ matrix.task }}
           path: |
             reports/signoff
-            build/formal_${{ matrix.variant }}/**/*.vcd
+            build/**/*.vcd
 
   sim:
     runs-on: ubuntu-24.04

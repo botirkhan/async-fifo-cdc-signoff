@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RTL = ["rtl/sync_2ff.sv", "rtl/async_fifo.sv"]
 BUILD = ROOT / "build"
 OUT = ROOT / "reports" / "signoff"
-FORMAL_DEPTH = {"bmc": 30, "cover": 40}
+FORMAL_DEPTH = {"bmc": 40, "cover": 40}
 
 SIM_CONFIGS = [  # name, wper, rper, wphase, rphase (ps)
     ("1to1_skewed", 10000, 10000, 0, 3300),
@@ -318,7 +318,7 @@ def prop_names(path):
 
 
 def step_formal(args):
-    d = BUILD / f"formal_{args.variant}"
+    d = BUILD / f"formal_{args.variant}_{args.task}"
     if d.exists():
         shutil.rmtree(d)
     d.mkdir(parents=True)
@@ -327,13 +327,22 @@ def step_formal(args):
     for f in files:
         pnames.update(prop_names(f))
     defs = " ".join(f"-D{x}" for x in defines(args.variant, ["META_INJECT"]))
-    tasks = ["bmc", "cover"] if args.variant == "clean" else ["bmc"]
+    if args.task == "all":
+        tasks = ["prove", "bmc", "cover"] if args.variant == "clean" else ["bmc"]
+    else:
+        tasks = [args.task]
+    # clean design: ABC engines (fast on this multiclock model); mutants: smtbmc gives readable traces
+    engine = {"prove": "abc pdr", "cover": "smtbmc yices",
+              "bmc": "abc bmc3" if args.variant == "clean" else "smtbmc yices"}
+    opts = []
+    for t in tasks:
+        opts.append(f"{t}: mode {t}")
+        if t in FORMAL_DEPTH:
+            opts.append(f"{t}: depth {FORMAL_DEPTH[t]}")
     sby = "\n".join([
         "[tasks]", *tasks, "",
-        "[options]",
-        *[l for t in tasks for l in (f"{t}: mode {t}", f"{t}: depth {FORMAL_DEPTH[t]}")],
-        "multiclock on", "",
-        "[engines]", "smtbmc yices", "",
+        "[options]", *opts, "multiclock on", "",
+        "[engines]", *[f"{t}: {engine[t]}" for t in tasks], "",
         "[script]",
         f"verilog_defines {defs}",
         "read -formal sync_2ff.sv async_fifo.sv fifo_formal.sv",
@@ -348,30 +357,33 @@ def step_formal(args):
         status = "PASS" if re.search(r"DONE \(PASS", out) else ("FAIL" if re.search(r"DONE \(FAIL", out) else
                                                                 ("TIMEOUT" if "SIGNOFF_TIMEOUT" in out else "ERROR"))
         failed = []
-        for m in re.finditer(r"Assert failed in \S+: (\S+?):(\d+)", out):
+        for m in re.finditer(r"(?:Assert failed in \S+: |failed assertion \S+ at )(\S+?):(\d+)", out):
             key = (Path(m.group(1)).name, int(m.group(2)))
             failed.append(pnames.get(key, f"{key[0]}:{key[1]}"))
-        step = re.search(r"BMC failed!|Assert failed.*?step (\d+)", out)
-        fstep = re.search(r"Checking assertions in step (\d+)\.\.\.\s*\n.*?BMC failed", out, re.S)
+        fstep = re.search(r"failed assertion .*? step (\d+)", out)
         reached = []
         for m in re.finditer(r"Reached cover statement at (\S+?):(\d+)", out):
             key = (Path(m.group(1)).name, int(m.group(2)))
             reached.append(pnames.get(key, f"{key[0]}:{key[1]}"))
+        csteps = [int(x) for x in re.findall(r"Reached cover statement .*? in step (\d+)", out)]
         unreached = len(re.findall(r"Unreached cover statement", out))
-        res["tasks"][t] = {"status": status, "time_s": dt, "failed_props": sorted(set(failed)),
+        res["tasks"][t] = {"status": status, "engine": engine[t], "time_s": dt,
+                           "depth": FORMAL_DEPTH.get(t), "failed_props": sorted(set(failed)),
                            "fail_step": int(fstep.group(1)) if fstep else None,
-                           "covers_reached": sorted(set(reached)), "covers_unreached": unreached}
-        print(f"[formal] {args.variant} {t} depth {FORMAL_DEPTH[t]}: {status} ({dt}s)"
+                           "covers_reached": sorted(set(reached)), "cover_steps": csteps,
+                           "covers_unreached": unreached}
+        print(f"[formal] {args.variant} {t} ({engine[t]}"
+              + (f", depth {FORMAL_DEPTH[t]}" if t in FORMAL_DEPTH else ", unbounded") + f"): {status} ({dt}s)"
               + (f" failed: {', '.join(sorted(set(failed)))}" if failed else "")
               + (f" at step {fstep.group(1)}" if fstep else "")
-              + (f" covers reached: {', '.join(sorted(set(reached)))}; unreached {unreached}" if t == "cover" else ""))
+              + (f" covers reached: {', '.join(sorted(set(reached)))} (steps {csteps}); unreached {unreached}" if t == "cover" else ""))
         if status in ("ERROR", "TIMEOUT"):
             print(out[-3000:])
             res["error"] = f"sby {t} {status}"
-        if t == "bmc":
-            ok &= status == "PASS"
-        else:
+        if t == "cover":
             ok &= status == "PASS" and unreached == 0
+        else:
+            ok &= status == "PASS"
     return ok, res
 
 
@@ -423,6 +435,7 @@ def main():
     ap.add_argument("--expect", choices=["pass", "fail"])
     ap.add_argument("--txns", type=int, default=3000)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--task", default="all", choices=["all", "prove", "bmc", "cover"])
     ap.add_argument("--formal-timeout", type=int, default=1200, help="seconds per sby task")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
@@ -431,7 +444,8 @@ def main():
                "formal": step_formal, "sim": step_sim}[args.step](args)
     result = "error" if res.get("error") else ("pass" if ok else "fail")
     res.update(step=args.step, variant=args.variant, result=result, expect=args.expect)
-    (OUT / f"{args.step}_{args.variant}.json").write_text(json.dumps(res, indent=2))
+    tag = f"{args.variant}_{args.task}" if args.step == "formal" else args.variant
+    (OUT / f"{args.step}_{tag}.json").write_text(json.dumps(res, indent=2))
     line = f"SIGNOFF step={args.step} variant={args.variant} result={result}" + \
            (f" expect={args.expect}" if args.expect else "")
     print(line)
