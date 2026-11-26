@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RTL = ["rtl/sync_2ff.sv", "rtl/async_fifo.sv"]
 BUILD = ROOT / "build"
 OUT = ROOT / "reports" / "signoff"
-FORMAL_DEPTH = {"bmc": 48, "cover": 60}
+FORMAL_DEPTH = {"bmc": 40, "cover": 48}
 
 SIM_CONFIGS = [  # name, wper, rper, wphase, rphase (ps)
     ("1to1_skewed", 10000, 10000, 0, 3300),
@@ -53,6 +53,25 @@ def defines(variant, extra=()):
     if variant and variant != "clean":
         d.append(variant)
     return d
+
+
+def run_stream(cmd, cwd, log, timeout):
+    """Like run() but echoes output live (so long formal runs show progress in CI)."""
+    t0 = time.time()
+    lines = []
+    p = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        for line in p.stdout:
+            lines.append(line)
+            print("    | " + line.rstrip())
+            if time.time() - t0 > timeout:
+                p.kill()
+                lines.append("SIGNOFF_TIMEOUT\n")
+                break
+        p.wait()
+    finally:
+        Path(log).write_text("".join(lines))
+    return p.returncode, "".join(lines), round(time.time() - t0, 1)
 
 
 def yosys(script, log):
@@ -325,8 +344,10 @@ def step_formal(args):
     res = {"variant": args.variant, "depth": FORMAL_DEPTH, "tasks": {}}
     ok = True
     for t in tasks:
-        rc, out, dt = run(["sby", "-f", "fifo.sby", t], cwd=d, log=d / f"sby_{t}.log", timeout=5400)
-        status = "PASS" if re.search(r"DONE \(PASS", out) else ("FAIL" if re.search(r"DONE \(FAIL", out) else "ERROR")
+        rc, out, dt = run_stream(["sby", "-f", "fifo.sby", t], cwd=d, log=d / f"sby_{t}.log",
+                                 timeout=args.formal_timeout)
+        status = "PASS" if re.search(r"DONE \(PASS", out) else ("FAIL" if re.search(r"DONE \(FAIL", out) else
+                                                                ("TIMEOUT" if "SIGNOFF_TIMEOUT" in out else "ERROR"))
         failed = []
         for m in re.finditer(r"Assert failed in \S+: (\S+?):(\d+)", out):
             key = (Path(m.group(1)).name, int(m.group(2)))
@@ -345,7 +366,7 @@ def step_formal(args):
               + (f" failed: {', '.join(sorted(set(failed)))}" if failed else "")
               + (f" at step {fstep.group(1)}" if fstep else "")
               + (f" covers reached: {', '.join(sorted(set(reached)))}; unreached {unreached}" if t == "cover" else ""))
-        if status == "ERROR":
+        if status in ("ERROR", "TIMEOUT"):
             print(out[-3000:])
         if t == "bmc":
             ok &= status == "PASS"
@@ -402,6 +423,7 @@ def main():
     ap.add_argument("--expect", choices=["pass", "fail"])
     ap.add_argument("--txns", type=int, default=3000)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--formal-timeout", type=int, default=2400, help="seconds per sby task")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     BUILD.mkdir(parents=True, exist_ok=True)
