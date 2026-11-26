@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="async-fifo" tests="34" failures="0">
+  <testcase classname="async_fifo" name="1to1_aligned.seed1" time="3.4"></testcase>
+  <testcase classname="async_fifo" name="1to1_aligned.seed2" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="1to1_aligned.seed3" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="1to1_aligned.seed4" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="1to1_skewed.seed1" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="1to1_skewed.seed2" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="1to1_skewed.seed3" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="1to1_skewed.seed4" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="near_1to1_beat.seed1" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="near_1to1_beat.seed2" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="near_1to1_beat.seed3" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="near_1to1_beat.seed4" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="wr_fast_3.7x.seed1" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="wr_fast_3.7x.seed2" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="wr_fast_3.7x.seed3" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="wr_fast_3.7x.seed4" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="rd_fast_3.7x.seed1" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="rd_fast_3.7x.seed2" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="rd_fast_3.7x.seed3" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="rd_fast_3.7x.seed4" time="2.6"></testcase>
+  <testcase classname="async_fifo" name="wr_fast_11x.seed1" time="2.7"></testcase>
+  <testcase classname="async_fifo" name="wr_fast_11x.seed2" time="2.7"></testcase>
+  <testcase classname="async_fifo" name="wr_fast_11x.seed3" time="2.7"></testcase>
+  <testcase classname="async_fifo" name="wr_fast_11x.seed4" time="2.7"></testcase>
+  <testcase classname="async_fifo" name="rd_fast_11x.seed1" time="2.7"></testcase>
+  <testcase classname="async_fifo" name="rd_fast_11x.seed2" time="2.7"></testcase>
+  <testcase classname="async_fifo" name="rd_fast_11x.seed3" time="2.7"></testcase>
+  <testcase classname="async_fifo" name="rd_fast_11x.seed4" time="2.7"></testcase>
+  <testcase classname="async_fifo.mutation" name="BUG_WR_WHEN_FULL" time="19.2"></testcase>
+  <testcase classname="async_fifo.mutation" name="BUG_RD_WHEN_EMPTY" time="19.5"></testcase>
+  <testcase classname="async_fifo.mutation" name="BUG_FULL_MSB" time="19.0"></testcase>
+  <testcase classname="async_fifo.mutation" name="BUG_GRAY_CONV" time="20.2"></testcase>
+  <testcase classname="async_fifo.mutation" name="BUG_BIN_CROSS" time="19.0"></testcase>
+  <testcase classname="async_fifo.mutation" name="BUG_ONE_FLOP" time="19.4"></testcase>
+</testsuite>

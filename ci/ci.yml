@@ -1,0 +1,105 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: YosysHQ/setup-oss-cad-suite@v3
+      - name: Verilator lint (-Wall, 3 parameter sets)
+        run: python3 scripts/signoff.py lint --expect pass
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lint
+          path: reports/signoff
+
+  cdc:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: clean,         expect: pass }
+          - { variant: BUG_BIN_CROSS, expect: fail }
+          - { variant: BUG_ONE_FLOP,  expect: fail }
+    name: cdc (${{ matrix.variant }}, expect ${{ matrix.expect }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: YosysHQ/setup-oss-cad-suite@v3
+      - run: python3 scripts/signoff.py cdc --variant ${{ matrix.variant }} --expect ${{ matrix.expect }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cdc-${{ matrix.variant }}
+          path: reports/signoff
+
+  lec:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: clean,        expect: pass }
+          - { variant: BUG_FULL_MSB, expect: fail }
+    name: lec (gate from ${{ matrix.variant }}, expect ${{ matrix.expect }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: YosysHQ/setup-oss-cad-suite@v3
+      - run: python3 scripts/signoff.py lec --variant ${{ matrix.variant }} --expect ${{ matrix.expect }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lec-${{ matrix.variant }}
+          path: reports/signoff
+
+  formal:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: clean,             expect: pass }
+          - { variant: BUG_WR_WHEN_FULL,  expect: fail }
+          - { variant: BUG_RD_WHEN_EMPTY, expect: fail }
+          - { variant: BUG_FULL_MSB,      expect: fail }
+          - { variant: BUG_GRAY_CONV,     expect: fail }
+    name: formal (${{ matrix.variant }}, expect ${{ matrix.expect }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: YosysHQ/setup-oss-cad-suite@v3
+      - run: python3 scripts/signoff.py formal --variant ${{ matrix.variant }} --expect ${{ matrix.expect }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: formal-${{ matrix.variant }}
+          path: |
+            reports/signoff
+            build/formal_${{ matrix.variant }}/**/*.vcd
+
+  sim:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: clean,             expect: pass }
+          - { variant: BUG_WR_WHEN_FULL,  expect: fail }
+          - { variant: BUG_RD_WHEN_EMPTY, expect: fail }
+          - { variant: BUG_FULL_MSB,      expect: fail }
+          - { variant: BUG_GRAY_CONV,     expect: fail }
+    name: sim (${{ matrix.variant }}, expect ${{ matrix.expect }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: YosysHQ/setup-oss-cad-suite@v3
+      - run: python3 scripts/signoff.py sim --variant ${{ matrix.variant }} --expect ${{ matrix.expect }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sim-${{ matrix.variant }}
+          path: reports/signoff

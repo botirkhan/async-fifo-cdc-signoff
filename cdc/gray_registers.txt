@@ -1,0 +1,5 @@
+# Registers allowed to cross clock domains as multi-bit buses.
+# Each one must be Gray coded; that is checked by SVA A1/A2 in simulation and
+# by the F_WGRAY_ONEHOT0 / F_RGRAY_ONEHOT0 formal properties.
+wgray
+rgray
